@@ -139,3 +139,13 @@ int32_t main(int32_t argc, char* argv[]) {
 
 	return 0;
 }
+
+/*
+Using git submodules:
+Add submodule:
+	git submodule add <remote_url> <destination_folder>
+Init submodule:
+	git submodule update --init --recursive
+Update submodule:
+	git submodule update --remote --merge
+*/

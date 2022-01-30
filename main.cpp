@@ -14,7 +14,7 @@ struct DictEntry {
 };
 
 void compress(string sInFile, string sOutFile) {
-	vector <DictEntry> dict;
+	vector<DictEntry> dict;
 	ifstream in(sInFile, ios::binary);
 
 	in.seekg(0, in.end);
@@ -62,10 +62,12 @@ void compress(string sInFile, string sOutFile) {
 		out.write((char*)(&dict[i].uRef), lg);
 		out.put(dict[i].cAddSym);
 	}
+	out.close();
 }
 
 int main(int argc, char* argv[]) {
 	if (argc < 3) return 1;
+	
 	compress(argv[1], argv[2]);
 
 	return 0;
