@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
+#include "vector/vector.h"
 
 const uint64_t HASH0_P = 151ul;
 const uint64_t HASH0_M = 100000004987ul;
@@ -17,33 +18,37 @@ typedef struct {
 typedef struct {
 	uint32_t ref;
 	char addSym;
+	Hash hashes[2];
 } DictEntry;
 
-DictEntry dict[65536];
-uint32_t sz;
+DECLARE_VECTOR(DictEntry)
 
-Hash hashes[65536][2];
-Hash curHashes[2];
+Vec_DictEntry dict;
+DictEntry curEntry;
 
 int32_t find_eq() {
-	for (int32_t i = 0; i < sz; i++) {
-		if (hashes[i][0].p != curHashes[0].p) continue;
-		if (hashes[i][0].val != curHashes[0].val) continue;
+	DictEntry entry;
+	for (int32_t i = 0; i < dict.size; i++) {
+		entry = dict.Get(&dict, i);
+		if (entry.hashes[0].p 	!= curEntry.hashes[0].p) 		continue;
+		if (entry.hashes[0].val != curEntry.hashes[0].val) 	continue;
 
-		if (hashes[i][1].p != curHashes[1].p) continue;
-		if (hashes[i][1].val != curHashes[1].val) continue;
+		if (entry.hashes[1].p 	!= curEntry.hashes[1].p) continue;
+		if (entry.hashes[1].val != curEntry.hashes[1].val) continue;
 
 		return i;
 	}
 	return -1;
 }
 
+uint32_t sz;
 char vals[65536][1024];
 
 void compress_file(char* inpf, char* outf) {
 	sz = 1;
-	curHashes[0].p = 1; curHashes[0].val = 0;
-	curHashes[1].p = 1; curHashes[1].val = 0;
+	VecInit_DictEntry(&dict);
+	curEntry.hashes[0].p = 1; curEntry.hashes[0].val = 0;
+	curEntry.hashes[1].p = 1; curEntry.hashes[1].val = 0;
 
 	FILE* fp = fopen(inpf, "r");
 	fseek(fp, 0, SEEK_END);
@@ -52,32 +57,37 @@ void compress_file(char* inpf, char* outf) {
   char* s = malloc(fsize);
   fread(s, fsize, 1, fp);
 
+  dict.Push(&dict, curEntry);
 	int32_t prevRet = -1;
 	for (uint32_t i = 0; i < fsize; i++) {
-		curHashes[0].val += (s[i] * curHashes[0].p) % HASH0_M;
-		curHashes[0].p = (curHashes[0].p * HASH0_P) % HASH0_M;
+		curEntry.hashes[0].val += (s[i] * curEntry.hashes[0].p) % HASH0_M;
+		curEntry.hashes[0].p = (curEntry.hashes[0].p * HASH0_P) % HASH0_M;
 
-		curHashes[1].val += (s[i] * curHashes[1].p) % HASH1_M;
-		curHashes[1].p = (curHashes[1].p * HASH1_P) % HASH1_M;
+		curEntry.hashes[1].val += (s[i] * curEntry.hashes[1].p) % HASH1_M;
+		curEntry.hashes[1].p = (curEntry.hashes[1].p * HASH1_P) % HASH1_M;
 
 		int32_t ret = find_eq();
 		if (ret == -1) {
-			dict[sz].ref = (prevRet < 0 ? 0 : prevRet);
-			dict[sz].addSym = s[i];
-
-			hashes[sz][0].val = curHashes[0].val; hashes[sz][1].val = curHashes[1].val;
-			hashes[sz][0].p = curHashes[0].p; 		hashes[sz][1].p = curHashes[1].p;
+			curEntry.ref = (prevRet < 0 ? 0 : prevRet);
+			curEntry.addSym = s[i];
+			dict.Push(&dict, curEntry);
 #ifdef _DEBUG
-			strcpy(vals[sz], vals[dict[sz].ref]);
+			strcpy(vals[sz], vals[curEntry.ref]);
 			uint32_t ln = strlen(vals[sz]);
-			vals[sz][ln] = dict[sz].addSym; vals[sz][ln + 1] = '\0';
+			vals[sz][ln] = curEntry.addSym; vals[sz][ln + 1] = '\0';
 #endif
 			sz++;
 
-			curHashes[0].p = 1; curHashes[0].val = 0;
-			curHashes[1].p = 1; curHashes[1].val = 0;
+			curEntry.hashes[0].p = 1; curEntry.hashes[0].val = 0;
+			curEntry.hashes[1].p = 1; curEntry.hashes[1].val = 0;
 		}
 		prevRet = ret;
+	}
+
+	if (prevRet != -1) {
+		curEntry.ref = 0;
+		curEntry.addSym = s[fsize - 1];
+		dict.Push(&dict, curEntry);
 	}
 
 	fp = fopen(outf, "wb");
@@ -87,13 +97,15 @@ void compress_file(char* inpf, char* outf) {
 	else				lg = lg / 8;
 
 	fwrite(&lg, sizeof(uint8_t), 1, fp);
-	for (uint32_t i = 1; i < sz; i++) {
+	for (uint32_t i = 1; i < dict.size; i++) {
+		curEntry = dict.Get(&dict, i);
 #ifdef _DEBUG
-		printf("%i: (%i, %c) | %s\n", i, dict[i].ref, dict[i].addSym, vals[i]);
+		printf("%i: (%i, %c) | %s\n", i, curEntry.ref, curEntry.addSym, vals[i]);
 #endif
-		fwrite((char*)(&dict[i].ref), lg, 1, fp);
-		fwrite(&dict[i].addSym, sizeof(char), 1, fp);
+		fwrite((char*)(&curEntry.ref), lg, 1, fp);
+		fwrite(&curEntry.addSym, sizeof(char), 1, fp);
 	}
+	VecFree_DictEntry(&dict);
 
 	fclose(fp);
 }

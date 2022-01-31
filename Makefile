@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-std=c11 -O2
+CFLAGS=-std=c11 -O2 -lm
 CTARGET=main.exe
 
 clean: main.exe
